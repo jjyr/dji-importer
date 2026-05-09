@@ -1,0 +1,356 @@
+import SwiftUI
+
+struct ContentView: View {
+    @StateObject private var viewModel = ImportViewModel()
+
+    var body: some View {
+        NavigationSplitView {
+            sidebar
+        } detail: {
+            detail
+        }
+        .frame(minWidth: 960, minHeight: 600)
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Sources")
+                    .font(.headline)
+
+                Spacer()
+
+                Button {
+                    viewModel.refreshVolumes()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .disabled(viewModel.isImporting)
+                .help("Refresh volumes")
+            }
+            .padding([.horizontal, .top], 14)
+            .padding(.bottom, 8)
+
+            if viewModel.volumes.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "externaldrive.badge.questionmark")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+
+                    Text("No volumes found")
+                        .font(.headline)
+
+                    Text("Connect DJI Pocket 3 or choose a folder.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(selection: Binding(
+                    get: { viewModel.selectedVolumeID },
+                    set: { viewModel.selectVolume(id: $0) }
+                )) {
+                    ForEach(viewModel.volumes) { volume in
+                        VolumeRow(volume: volume)
+                            .tag(volume.id)
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+
+            Divider()
+
+            Button {
+                viewModel.chooseFolder()
+            } label: {
+                Label("Choose Folder", systemImage: "folder")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isImporting)
+            .padding(14)
+        }
+        .navigationSplitViewColumnWidth(min: 230, ideal: 260)
+    }
+
+    private var detail: some View {
+        VStack(spacing: 0) {
+            header
+
+            Divider()
+
+            mediaContent
+
+            Divider()
+
+            footer
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(viewModel.selectedVolume?.name ?? "DJI Importer")
+                    .font(.system(size: 24, weight: .semibold))
+
+                Text(viewModel.selectedVolume?.subtitle ?? "Choose a source to scan media.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                HStack(spacing: 10) {
+                    SummaryChip(symbolName: "photo.on.rectangle.angled", text: viewModel.mediaSummary)
+
+                    if let selectedVolume = viewModel.selectedVolume,
+                       let availableCapacity = selectedVolume.availableCapacity,
+                       let totalCapacity = selectedVolume.totalCapacity {
+                        SummaryChip(
+                            symbolName: "externaldrive",
+                            text: "\(availableCapacity.fileSizeText) free of \(totalCapacity.fileSizeText)"
+                        )
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button {
+                viewModel.scanSelectedVolume()
+            } label: {
+                Label("Rescan", systemImage: "arrow.clockwise")
+            }
+            .disabled(viewModel.selectedVolume == nil || viewModel.isScanning || viewModel.isImporting)
+
+            if viewModel.isImporting {
+                Button(role: .cancel) {
+                    viewModel.cancelImport()
+                } label: {
+                    Label("Cancel", systemImage: "xmark.circle")
+                }
+            } else {
+                Button {
+                    viewModel.startImportAll()
+                } label: {
+                    Label("Import All", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
+            }
+        }
+        .padding(20)
+    }
+
+    @ViewBuilder
+    private var mediaContent: some View {
+        if viewModel.isScanning {
+            ProgressView("Scanning media...")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.mediaFiles.isEmpty {
+            EmptyMediaView(hasError: viewModel.lastError != nil)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Table(viewModel.mediaFiles) {
+                TableColumn("Name") { item in
+                    HStack(spacing: 10) {
+                        Image(systemName: item.kind.symbolName)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                                .lineLimit(1)
+
+                            Text(item.relativePath)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                }
+                .width(min: 300, ideal: 460)
+
+                TableColumn("Kind") { item in
+                    Text(item.kind.title)
+                }
+                .width(80)
+
+                TableColumn("Size") { item in
+                    Text(item.size.fileSizeText)
+                }
+                .width(90)
+
+                TableColumn("Status") { item in
+                    StatusLabel(state: item.importState)
+                }
+                .width(120)
+            }
+        }
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if viewModel.progress.total > 0 {
+                ProgressView(value: viewModel.progress.fraction)
+
+                HStack {
+                    Text("\(viewModel.progress.completed) of \(viewModel.progress.total)")
+
+                    if viewModel.progress.succeeded > 0 {
+                        Text("\(viewModel.progress.succeeded) done")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if viewModel.progress.failed > 0 {
+                        Text("\(viewModel.progress.failed) failed")
+                            .foregroundStyle(.red)
+                    }
+
+                    Spacer()
+
+                    if let currentFile = viewModel.progress.currentFile {
+                        Text(currentFile)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .font(.caption)
+            }
+
+            HStack {
+                Text(viewModel.lastError ?? viewModel.statusMessage)
+                    .foregroundColor(viewModel.lastError == nil ? Color.secondary : Color.red)
+                    .lineLimit(2)
+
+                Spacer()
+            }
+            .font(.callout)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+}
+
+private struct VolumeRow: View {
+    let volume: VolumeCandidate
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: volume.isLikelyCameraVolume ? "camera" : "externaldrive")
+                .foregroundStyle(volume.isLikelyCameraVolume ? .blue : .secondary)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(volume.name)
+                        .lineLimit(1)
+
+                    if volume.isLikelyCameraVolume {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
+
+                Text(volume.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct SummaryChip: View {
+    let symbolName: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbolName)
+            Text(text)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}
+
+private struct StatusLabel: View {
+    let state: ImportState
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbolName)
+            Text(state.title)
+        }
+        .foregroundStyle(color)
+        .help(helpText)
+    }
+
+    private var symbolName: String {
+        switch state {
+        case .pending:
+            return "circle"
+        case .importing:
+            return "arrow.triangle.2.circlepath"
+        case .finished:
+            return "checkmark.circle.fill"
+        case .failed:
+            return "xmark.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .pending:
+            return .secondary
+        case .importing:
+            return .blue
+        case .finished:
+            return .green
+        case .failed:
+            return .red
+        }
+    }
+
+    private var helpText: String {
+        switch state {
+        case .pending:
+            return "Ready to import"
+        case .importing:
+            return "Importing into Photos"
+        case .finished(let message):
+            return message ?? "Imported or skipped by Photos duplicate detection"
+        case .failed(let message):
+            return message
+        }
+    }
+}
+
+private struct EmptyMediaView: View {
+    let hasError: Bool
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: hasError ? "exclamationmark.triangle" : "photo.stack")
+                .font(.system(size: 44))
+                .foregroundStyle(hasError ? .red : .secondary)
+
+            Text(hasError ? "Scan failed" : "No media to import")
+                .font(.headline)
+
+            Text(hasError ? "Check the selected source and try again." : "Supported formats: JPG, JPEG, MP4.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding()
+    }
+}
