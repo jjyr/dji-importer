@@ -3,15 +3,23 @@ import Foundation
 
 @MainActor
 final class ImportViewModel: ObservableObject {
+    enum ImportMode {
+        case resume
+        case startOver
+    }
+
     @Published private(set) var volumes: [VolumeCandidate] = []
     @Published var selectedVolumeID: VolumeCandidate.ID?
     @Published private(set) var mediaFiles: [MediaItem] = []
     @Published private(set) var isScanning = false
     @Published private(set) var isImporting = false
+    @Published private(set) var canResumeImport = false
     @Published private(set) var progress = ImportProgressState.empty
     @Published private(set) var statusMessage = "Connect DJI Pocket 3 or choose a folder."
     @Published private(set) var lastError: String?
 
+    private let manifestStore = ImportManifestStore()
+    private var activeManifest: ImportManifest?
     private var scanTask: Task<Void, Never>?
     private var importTask: Task<Void, Never>?
 
@@ -24,6 +32,14 @@ final class ImportViewModel: ObservableObject {
 
     var mediaSummary: String {
         MediaScanner.summary(for: mediaFiles)
+    }
+
+    var primaryImportTitle: String {
+        canResumeImport ? "Resume Import" : "Import All"
+    }
+
+    var primaryImportSymbolName: String {
+        canResumeImport ? "arrow.clockwise.circle" : "square.and.arrow.down"
     }
 
     init() {
@@ -94,6 +110,8 @@ final class ImportViewModel: ObservableObject {
 
         scanTask?.cancel()
         progress = .empty
+        canResumeImport = false
+        activeManifest = nil
 
         guard let selectedVolume else {
             mediaFiles = []
@@ -118,7 +136,7 @@ final class ImportViewModel: ObservableObject {
                 }
 
                 self?.mediaFiles = items
-                self?.statusMessage = items.isEmpty ? "No supported media found." : "Scan complete."
+                self?.applyResumeManifestIfAvailable(for: items, rootURL: rootURL)
             } catch {
                 guard !Task.isCancelled else {
                     return
@@ -133,70 +151,274 @@ final class ImportViewModel: ObservableObject {
         }
     }
 
-    func startImportAll() {
+    func startPrimaryImport() {
+        startImport(mode: canResumeImport ? .resume : .startOver)
+    }
+
+    func startOverImport() {
+        startImport(mode: .startOver)
+    }
+
+    func cancelImport() {
+        importTask?.cancel()
+        statusMessage = "Cancelling after the current batch..."
+    }
+
+    private func startImport(mode: ImportMode) {
         guard !isScanning, !isImporting, !mediaFiles.isEmpty else {
             return
         }
 
         importTask = Task { [weak self] in
-            await self?.importAll()
+            await self?.importAll(mode: mode)
         }
     }
 
-    func cancelImport() {
-        importTask?.cancel()
-        importTask = nil
-        isImporting = false
-
-        for index in mediaFiles.indices where mediaFiles[index].importState == .importing {
-            mediaFiles[index].importState = .pending
+    private func importAll(mode: ImportMode) async {
+        guard let selectedVolume else {
+            return
         }
 
-        statusMessage = "Import cancelled."
-    }
-
-    private func importAll() async {
         isImporting = true
         lastError = nil
-        progress = ImportProgressState(total: mediaFiles.count)
-        statusMessage = "Starting import into Photos..."
 
-        for index in mediaFiles.indices {
+        do {
+            var manifest = try manifest(for: mode, selectedVolume: selectedVolume)
+            activeManifest = manifest
+
+            if mode == .startOver {
+                resetImportStates()
+                canResumeImport = false
+            } else {
+                applyManifest(manifest)
+            }
+
+            let skipped = mediaFiles.filter { $0.importState == .skipped }.count
+            progress = ImportProgressState(
+                total: mediaFiles.count,
+                completed: skipped,
+                succeeded: 0,
+                skipped: skipped,
+                failed: 0,
+                currentFile: nil
+            )
+
+            let pendingCount = mediaFiles.count - skipped
+            guard pendingCount > 0 else {
+                statusMessage = "Nothing left to import."
+                isImporting = false
+                return
+            }
+
+            try await PhotoKitImporter.requestAddPermission()
+
+            var tuner = BatchTuner()
+            statusMessage = "Starting PhotoKit import..."
+
+            while !Task.isCancelled {
+                let pendingIndexes = mediaFiles.indices.filter { index in
+                    if case .pending = mediaFiles[index].importState {
+                        return true
+                    }
+                    return false
+                }
+
+                guard !pendingIndexes.isEmpty else {
+                    break
+                }
+
+                let batchIndexes = nextBatchIndexes(from: pendingIndexes, limits: tuner.limits)
+                guard !batchIndexes.isEmpty else {
+                    break
+                }
+
+                for index in batchIndexes {
+                    mediaFiles[index].importState = .importing
+                }
+
+                let batch = batchIndexes.map { mediaFiles[$0] }
+                progress.currentFile = batch.first?.relativePath
+                statusMessage = "Importing batch of \(batch.count) files..."
+
+                let startedAt = Date()
+                let importedAssets = try await PhotoKitImporter.importBatch(batch)
+                let elapsed = max(Date().timeIntervalSince(startedAt), 0.001)
+                let importedBytes = batch.reduce(Int64(0)) { $0 + $1.size }
+
+                let localIdentifiersByKey = Dictionary(
+                    uniqueKeysWithValues: importedAssets.map { ($0.resumeKey, $0.localIdentifier) }
+                )
+
+                for index in batchIndexes {
+                    let media = mediaFiles[index]
+                    guard let localIdentifier = localIdentifiersByKey[media.resumeKey] else {
+                        continue
+                    }
+
+                    mediaFiles[index].importState = .finished(localIdentifier)
+                    manifest.importedItems[media.resumeKey] = ImportManifestItem(
+                        relativePath: media.relativePath,
+                        size: media.size,
+                        modificationDate: media.modificationDate,
+                        localIdentifier: localIdentifier,
+                        importedAt: Date()
+                    )
+                }
+
+                try manifestStore.save(manifest)
+                activeManifest = manifest
+
+                progress.completed += batch.count
+                progress.succeeded += batch.count
+                progress.currentFile = nil
+
+                tuner.observe(bytes: importedBytes, seconds: elapsed)
+                statusMessage = batchStatus(
+                    fileCount: batch.count,
+                    bytes: importedBytes,
+                    elapsed: elapsed,
+                    limits: tuner.limits
+                )
+            }
+
             if Task.isCancelled {
+                statusMessage = "Import cancelled. Resume Import will skip completed batches."
+                canResumeImport = hasUnfinishedManifest(manifest, mediaFiles: mediaFiles)
+            } else {
+                statusMessage = "Import complete."
+                canResumeImport = false
+            }
+        } catch {
+            for index in mediaFiles.indices where mediaFiles[index].importState == .importing {
+                mediaFiles[index].importState = .failed(error.localizedDescription)
+            }
+            progress.failed += mediaFiles.filter {
+                if case .failed = $0.importState {
+                    return true
+                }
+                return false
+            }.count
+            lastError = error.localizedDescription
+            statusMessage = "Import failed. Resume Import will retry unfinished files."
+
+            if let activeManifest {
+                canResumeImport = hasUnfinishedManifest(activeManifest, mediaFiles: mediaFiles)
+            }
+        }
+
+        progress.currentFile = nil
+        isImporting = false
+        importTask = nil
+    }
+
+    private func manifest(for mode: ImportMode, selectedVolume: VolumeCandidate) throws -> ImportManifest {
+        switch mode {
+        case .startOver:
+            return try manifestStore.reset(
+                sourceRoot: selectedVolume.url,
+                sourceName: selectedVolume.name
+            )
+        case .resume:
+            if let manifest = activeManifest {
+                return manifest
+            }
+            if let manifest = try manifestStore.loadMatching(sourceRoot: selectedVolume.url) {
+                return manifest
+            }
+            return try manifestStore.reset(
+                sourceRoot: selectedVolume.url,
+                sourceName: selectedVolume.name
+            )
+        }
+    }
+
+    private func applyResumeManifestIfAvailable(for items: [MediaItem], rootURL: URL) {
+        guard !items.isEmpty else {
+            statusMessage = "No supported media found."
+            return
+        }
+
+        do {
+            guard let manifest = try manifestStore.loadMatching(sourceRoot: rootURL) else {
+                statusMessage = "Scan complete."
+                return
+            }
+
+            activeManifest = manifest
+            applyManifest(manifest)
+            canResumeImport = hasUnfinishedManifest(manifest, mediaFiles: mediaFiles)
+
+            let importedCount = mediaFiles.filter { $0.importState == .skipped }.count
+            if canResumeImport {
+                statusMessage = "Partial import found: \(importedCount) of \(mediaFiles.count) files already imported."
+            } else if importedCount == mediaFiles.count {
+                resetImportStates()
+                activeManifest = nil
+                statusMessage = "Previous import completed. Import All will start over."
+            } else {
+                statusMessage = "Scan complete."
+            }
+        } catch {
+            lastError = error.localizedDescription
+            statusMessage = "Could not read import manifest."
+        }
+    }
+
+    private func applyManifest(_ manifest: ImportManifest) {
+        for index in mediaFiles.indices {
+            if manifest.importedItems[mediaFiles[index].resumeKey] != nil {
+                mediaFiles[index].importState = .skipped
+            } else {
+                mediaFiles[index].importState = .pending
+            }
+        }
+    }
+
+    private func resetImportStates() {
+        for index in mediaFiles.indices {
+            mediaFiles[index].importState = .pending
+        }
+    }
+
+    private func hasUnfinishedManifest(_ manifest: ImportManifest, mediaFiles: [MediaItem]) -> Bool {
+        let importedCount = mediaFiles.filter { manifest.importedItems[$0.resumeKey] != nil }.count
+        return importedCount > 0 && importedCount < mediaFiles.count
+    }
+
+    private func nextBatchIndexes(from pendingIndexes: [Array<MediaItem>.Index], limits: BatchLimits) -> [Array<MediaItem>.Index] {
+        var batch: [Array<MediaItem>.Index] = []
+        var totalBytes: Int64 = 0
+        var videoCount = 0
+
+        for index in pendingIndexes {
+            let item = mediaFiles[index]
+            let isVideo = item.kind == .video
+            let wouldExceedFileLimit = batch.count >= limits.fileLimit
+            let wouldExceedByteLimit = totalBytes + item.size > limits.byteLimit
+            let wouldExceedVideoLimit = isVideo && videoCount >= limits.maxVideoFileLimit
+
+            if !batch.isEmpty && (wouldExceedFileLimit || wouldExceedByteLimit || wouldExceedVideoLimit) {
                 break
             }
 
-            mediaFiles[index].importState = .importing
-            progress.currentFile = mediaFiles[index].relativePath
-            statusMessage = "Importing \(mediaFiles[index].relativePath)"
-
-            let fileURL = mediaFiles[index].url
-            let result = await Task.detached(priority: .userInitiated) {
-                PhotosImporter.importFile(fileURL)
-            }.value
-
-            if result.succeeded {
-                mediaFiles[index].importState = .finished(result.message.isEmpty ? nil : result.message)
-                progress.succeeded += 1
-            } else {
-                let message = result.message.isEmpty ? "Unknown Photos import error." : result.message
-                mediaFiles[index].importState = .failed(message)
-                progress.failed += 1
+            batch.append(index)
+            totalBytes += item.size
+            if isVideo {
+                videoCount += 1
             }
-
-            progress.completed += 1
         }
 
-        isImporting = false
-        progress.currentFile = nil
+        return batch
+    }
 
-        if Task.isCancelled {
-            statusMessage = "Import cancelled."
-        } else if progress.failed == 0 {
-            statusMessage = "Import complete."
-        } else {
-            statusMessage = "Import complete with \(progress.failed) failed files."
-        }
+    private func batchStatus(
+        fileCount: Int,
+        bytes: Int64,
+        elapsed: TimeInterval,
+        limits: BatchLimits
+    ) -> String {
+        let bytesPerSecond = Int64(Double(bytes) / max(elapsed, 0.001))
+        return "Imported \(fileCount) files in \(elapsed.formatted(.number.precision(.fractionLength(1))))s at \(bytesPerSecond.fileSizeText)/s. Next batch up to \(limits.byteLimit.fileSizeText)."
     }
 
     private func mergeCustomSelection(with detectedVolumes: [VolumeCandidate]) -> [VolumeCandidate] {

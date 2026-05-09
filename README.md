@@ -9,8 +9,10 @@ The app keeps the original script behavior:
 - Scan mounted volumes under `/Volumes`.
 - Let the user choose a custom folder when automatic detection is not enough.
 - Find supported media recursively.
-- Import files into Photos one by one.
-- Ask Photos to skip duplicates with `skip check duplicates true`.
+- Import files into Photos through PhotoKit.
+- Keep one local import manifest so interrupted imports can resume without
+  retrying already completed files.
+- Start Over clears the manifest and imports the selected source from scratch.
 
 Supported formats currently match the original script:
 
@@ -73,9 +75,9 @@ Homebrew cask.
 Runtime Notes
 -------------
 
-- The first import may trigger a macOS Automation permission prompt because the
-  app sends Apple Events to Photos.
-- Photos is responsible for duplicate detection.
+- The first import may trigger a macOS Photos add-only permission prompt.
+- The app does not do global duplicate detection. It only skips files already
+  recorded in the current manifest when resuming an interrupted import.
 - If Photos rejects imports, open Photos once manually, then run the import
   again.
 - The app is currently intended for direct Developer ID distribution rather than

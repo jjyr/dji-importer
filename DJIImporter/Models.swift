@@ -53,6 +53,7 @@ enum MediaKind: String, Hashable {
 
 enum ImportState: Hashable {
     case pending
+    case skipped
     case importing
     case finished(String?)
     case failed(String)
@@ -61,6 +62,8 @@ enum ImportState: Hashable {
         switch self {
         case .pending:
             return "Ready"
+        case .skipped:
+            return "Skipped"
         case .importing:
             return "Importing"
         case .finished:
@@ -80,14 +83,24 @@ struct MediaItem: Identifiable, Hashable {
     let fileExtension: String
     let relativePath: String
     let size: Int64
+    let modificationDate: Date?
     let kind: MediaKind
     var importState: ImportState = .pending
+
+    var resumeKey: String {
+        let modifiedMilliseconds = modificationDate.map {
+            Int64(($0.timeIntervalSince1970 * 1000).rounded())
+        } ?? 0
+
+        return "\(relativePath)|\(size)|\(modifiedMilliseconds)"
+    }
 }
 
 struct ImportProgressState: Equatable {
     var total: Int = 0
     var completed: Int = 0
     var succeeded: Int = 0
+    var skipped: Int = 0
     var failed: Int = 0
     var currentFile: String?
 
@@ -101,7 +114,7 @@ struct ImportProgressState: Equatable {
     static let empty = ImportProgressState()
 }
 
-struct PhotosImportResult: Equatable {
-    let succeeded: Bool
-    let message: String
+struct PhotoKitImportedAsset: Equatable {
+    let resumeKey: String
+    let localIdentifier: String
 }

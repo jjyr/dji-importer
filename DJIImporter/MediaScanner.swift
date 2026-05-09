@@ -30,7 +30,7 @@ enum MediaScanner {
             throw MediaScannerError.notDirectory(root)
         }
 
-        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
+        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
         guard let enumerator = fileManager.enumerator(
             at: root,
             includingPropertiesForKeys: keys,
@@ -65,6 +65,7 @@ enum MediaScanner {
                     fileExtension: ext,
                     relativePath: relativePath(for: standardizedFileURL, root: root),
                     size: size,
+                    modificationDate: values?.contentModificationDate,
                     kind: kind
                 )
             )

@@ -13,9 +13,13 @@
 		100000000000000000000004 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* Models.swift */; };
 		100000000000000000000005 /* VolumeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* VolumeScanner.swift */; };
 		100000000000000000000006 /* MediaScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* MediaScanner.swift */; };
-		100000000000000000000007 /* PhotosImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* PhotosImporter.swift */; };
+		100000000000000000000007 /* PhotoKitImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* PhotoKitImporter.swift */; };
 		100000000000000000000008 /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* Formatters.swift */; };
 		100000000000000000000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* Assets.xcassets */; };
+		10000000000000000000000A /* BatchTuner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* BatchTuner.swift */; };
+		10000000000000000000000B /* ImportManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* ImportManifest.swift */; };
+		B00000000000000000000001 /* BatchTunerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000001 /* BatchTunerTests.swift */; };
+		B00000000000000000000002 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C00000000000000000000003 /* XCTest.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,11 +29,16 @@
 		200000000000000000000004 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		200000000000000000000005 /* VolumeScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeScanner.swift; sourceTree = "<group>"; };
 		200000000000000000000006 /* MediaScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaScanner.swift; sourceTree = "<group>"; };
-		200000000000000000000007 /* PhotosImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosImporter.swift; sourceTree = "<group>"; };
+		200000000000000000000007 /* PhotoKitImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitImporter.swift; sourceTree = "<group>"; };
 		200000000000000000000008 /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
 		200000000000000000000009 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		200000000000000000000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		200000000000000000000011 /* DJIImporter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DJIImporter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		20000000000000000000000A /* BatchTuner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchTuner.swift; sourceTree = "<group>"; };
+		20000000000000000000000B /* ImportManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportManifest.swift; sourceTree = "<group>"; };
+		C00000000000000000000001 /* BatchTunerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchTunerTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000002 /* DJIImporterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DJIImporterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C00000000000000000000003 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -40,6 +49,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D00000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000002 /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -47,6 +64,8 @@
 			isa = PBXGroup;
 			children = (
 				400000000000000000000002 /* DJIImporter */,
+				C00000000000000000000004 /* DJIImporterTests */,
+				C00000000000000000000005 /* Frameworks */,
 				400000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -60,7 +79,9 @@
 				200000000000000000000004 /* Models.swift */,
 				200000000000000000000005 /* VolumeScanner.swift */,
 				200000000000000000000006 /* MediaScanner.swift */,
-				200000000000000000000007 /* PhotosImporter.swift */,
+				200000000000000000000007 /* PhotoKitImporter.swift */,
+				20000000000000000000000A /* BatchTuner.swift */,
+				20000000000000000000000B /* ImportManifest.swift */,
 				200000000000000000000008 /* Formatters.swift */,
 				200000000000000000000010 /* Info.plist */,
 				200000000000000000000009 /* Assets.xcassets */,
@@ -72,8 +93,25 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000011 /* DJIImporter.app */,
+				C00000000000000000000002 /* DJIImporterTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000004 /* DJIImporterTests */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000001 /* BatchTunerTests.swift */,
+			);
+			path = DJIImporterTests;
+			sourceTree = "<group>";
+		};
+		C00000000000000000000005 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000003 /* XCTest.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -96,7 +134,35 @@
 			productReference = 200000000000000000000011 /* DJIImporter.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D00000000000000000000002 /* DJIImporterTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D00000000000000000000007 /* Build configuration list for PBXNativeTarget "DJIImporterTests" */;
+			buildPhases = (
+				D00000000000000000000003 /* Sources */,
+				D00000000000000000000001 /* Frameworks */,
+				D00000000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D00000000000000000000005 /* PBXTargetDependency */,
+			);
+			name = DJIImporterTests;
+			productName = DJIImporterTests;
+			productReference = C00000000000000000000002 /* DJIImporterTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		D00000000000000000000006 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 700000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 500000000000000000000001;
+			remoteInfo = DJIImporter;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXProject section */
 		700000000000000000000001 /* Project object */ = {
@@ -109,6 +175,11 @@
 					500000000000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
 						LastSwiftMigration = 1500;
+					};
+					D00000000000000000000002 = {
+						CreatedOnToolsVersion = 15.0;
+						LastSwiftMigration = 1500;
+						TestTargetID = 500000000000000000000001;
 					};
 				};
 			};
@@ -126,6 +197,7 @@
 			projectRoot = "";
 			targets = (
 				500000000000000000000001 /* DJIImporter */,
+				D00000000000000000000002 /* DJIImporterTests */,
 			);
 		};
 /* End PBXProject section */
@@ -136,6 +208,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				100000000000000000000009 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D00000000000000000000004 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -152,12 +231,30 @@
 				100000000000000000000004 /* Models.swift in Sources */,
 				100000000000000000000005 /* VolumeScanner.swift in Sources */,
 				100000000000000000000006 /* MediaScanner.swift in Sources */,
-				100000000000000000000007 /* PhotosImporter.swift in Sources */,
+				100000000000000000000007 /* PhotoKitImporter.swift in Sources */,
+				10000000000000000000000A /* BatchTuner.swift in Sources */,
+				10000000000000000000000B /* ImportManifest.swift in Sources */,
 				100000000000000000000008 /* Formatters.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D00000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000001 /* BatchTunerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D00000000000000000000005 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 500000000000000000000001 /* DJIImporter */;
+			targetProxy = D00000000000000000000006 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		900000000000000000000001 /* Debug */ = {
@@ -322,6 +419,56 @@
 			};
 			name = Release;
 		};
+		D00000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = en;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DJIImporter.app/Contents/MacOS/DJIImporter";
+			};
+			name = Debug;
+		};
+		D00000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = en;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DJIImporter.app/Contents/MacOS/DJIImporter";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -339,6 +486,15 @@
 			buildConfigurations = (
 				900000000000000000000003 /* Debug */,
 				900000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D00000000000000000000007 /* Build configuration list for PBXNativeTarget "DJIImporterTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D00000000000000000000008 /* Debug */,
+				D00000000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

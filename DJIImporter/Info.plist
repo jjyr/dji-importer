@@ -22,14 +22,14 @@
 	<string>public.app-category.photography</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>DJI Importer sends import commands to Photos so selected DJI media can be added to your library.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>DJI Importer imports selected DJI media into your Photos library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DJI Importer uses Photos access to add selected DJI media to your library.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSRemovableVolumesUsageDescription</key>

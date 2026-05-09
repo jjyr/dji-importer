@@ -133,12 +133,26 @@ struct ContentView: View {
                 }
             } else {
                 Button {
-                    viewModel.startImportAll()
+                    viewModel.startPrimaryImport()
                 } label: {
-                    Label("Import All", systemImage: "square.and.arrow.down")
+                    Label(viewModel.primaryImportTitle, systemImage: viewModel.primaryImportSymbolName)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
+
+                Menu {
+                    Button(role: .destructive) {
+                        viewModel.startOverImport()
+                    } label: {
+                        Label("Start Over", systemImage: "arrow.counterclockwise")
+                    }
+                    .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .menuStyle(.borderlessButton)
+                .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
+                .help("Import options")
             }
         }
         .padding(20)
@@ -202,6 +216,11 @@ struct ContentView: View {
 
                     if viewModel.progress.succeeded > 0 {
                         Text("\(viewModel.progress.succeeded) done")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if viewModel.progress.skipped > 0 {
+                        Text("\(viewModel.progress.skipped) skipped")
                             .foregroundStyle(.secondary)
                     }
 
@@ -298,6 +317,8 @@ private struct StatusLabel: View {
         switch state {
         case .pending:
             return "circle"
+        case .skipped:
+            return "forward.circle.fill"
         case .importing:
             return "arrow.triangle.2.circlepath"
         case .finished:
@@ -310,6 +331,8 @@ private struct StatusLabel: View {
     private var color: Color {
         switch state {
         case .pending:
+            return .secondary
+        case .skipped:
             return .secondary
         case .importing:
             return .blue
@@ -324,10 +347,12 @@ private struct StatusLabel: View {
         switch state {
         case .pending:
             return "Ready to import"
+        case .skipped:
+            return "Already imported in the current manifest; skipped for resume"
         case .importing:
             return "Importing into Photos"
         case .finished(let message):
-            return message ?? "Imported or skipped by Photos duplicate detection"
+            return message ?? "Imported into Photos"
         case .failed(let message):
             return message
         }
