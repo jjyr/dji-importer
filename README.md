@@ -55,6 +55,21 @@ The debug app will be produced at:
 ```
 
 
+Release
+-------
+
+Create or update a GitHub release for the current app version:
+
+```bash
+Scripts/release_github.sh
+```
+
+The script builds the unsigned Release app, creates `dist/DJIImporter.app.zip`,
+writes `dist/DJIImporter.app.zip.sha256`, and uploads both files to the
+`v<MARKETING_VERSION>` GitHub release. The resulting sha256 must match the
+Homebrew cask.
+
+
 Runtime Notes
 -------------
 

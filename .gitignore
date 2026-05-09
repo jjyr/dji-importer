@@ -13,6 +13,7 @@ wheels/
 
 # Xcode and local build output
 .build/
+dist/
 DerivedData/
 *.xcuserdata/
 xcuserdata/
