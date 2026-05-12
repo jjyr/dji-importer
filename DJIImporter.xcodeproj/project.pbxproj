@@ -19,6 +19,7 @@
 		10000000000000000000000A /* BatchTuner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* BatchTuner.swift */; };
 		10000000000000000000000B /* ImportManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* ImportManifest.swift */; };
 		B00000000000000000000001 /* BatchTunerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000001 /* BatchTunerTests.swift */; };
+		B00000000000000000000003 /* ImportManifestStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000006 /* ImportManifestStoreTests.swift */; };
 		B00000000000000000000002 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C00000000000000000000003 /* XCTest.framework */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +38,7 @@
 		20000000000000000000000A /* BatchTuner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchTuner.swift; sourceTree = "<group>"; };
 		20000000000000000000000B /* ImportManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportManifest.swift; sourceTree = "<group>"; };
 		C00000000000000000000001 /* BatchTunerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchTunerTests.swift; sourceTree = "<group>"; };
+		C00000000000000000000006 /* ImportManifestStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportManifestStoreTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000002 /* DJIImporterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DJIImporterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00000000000000000000003 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -102,6 +104,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000001 /* BatchTunerTests.swift */,
+				C00000000000000000000006 /* ImportManifestStoreTests.swift */,
 			);
 			path = DJIImporterTests;
 			sourceTree = "<group>";
@@ -243,6 +246,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B00000000000000000000001 /* BatchTunerTests.swift in Sources */,
+				B00000000000000000000003 /* ImportManifestStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -385,7 +389,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
@@ -410,7 +414,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
@@ -434,7 +438,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporterTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
@@ -459,7 +463,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporterTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;

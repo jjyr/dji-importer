@@ -118,6 +118,14 @@ struct ContentView: View {
 
             Spacer()
 
+            Toggle(isOn: $viewModel.deleteSourceFilesAfterImport) {
+                Label("Delete Originals", systemImage: "trash")
+            }
+            .toggleStyle(.checkbox)
+            .foregroundStyle(viewModel.deleteSourceFilesAfterImport ? Color.red : Color.primary)
+            .disabled(viewModel.isImporting)
+            .help("Delete source files after every imported file is recorded in Photos")
+
             Button {
                 viewModel.scanSelectedVolume()
             } label: {
@@ -224,6 +232,11 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
 
+                    if viewModel.progress.deleted > 0 {
+                        Text("\(viewModel.progress.deleted) deleted")
+                            .foregroundStyle(.secondary)
+                    }
+
                     if viewModel.progress.failed > 0 {
                         Text("\(viewModel.progress.failed) failed")
                             .foregroundStyle(.red)
@@ -323,6 +336,10 @@ private struct StatusLabel: View {
             return "arrow.triangle.2.circlepath"
         case .finished:
             return "checkmark.circle.fill"
+        case .deleted:
+            return "trash.circle.fill"
+        case .deleteFailed:
+            return "trash.slash.circle.fill"
         case .failed:
             return "xmark.circle.fill"
         }
@@ -338,6 +355,10 @@ private struct StatusLabel: View {
             return .blue
         case .finished:
             return .green
+        case .deleted:
+            return .green
+        case .deleteFailed:
+            return .red
         case .failed:
             return .red
         }
@@ -353,6 +374,10 @@ private struct StatusLabel: View {
             return "Importing into Photos"
         case .finished(let message):
             return message ?? "Imported into Photos"
+        case .deleted:
+            return "Imported into Photos and deleted from the source"
+        case .deleteFailed(let message):
+            return message
         case .failed(let message):
             return message
         }

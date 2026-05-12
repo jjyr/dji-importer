@@ -10,9 +10,11 @@ The app keeps the original script behavior:
 - Let the user choose a custom folder when automatic detection is not enough.
 - Find supported media recursively.
 - Import files into Photos through PhotoKit.
-- Keep one local import manifest so interrupted imports can resume without
-  retrying already completed files.
+- Keep one local import manifest plus an append-only `imported-items.jsond`
+  record so interrupted imports can resume without retrying already completed
+  files.
 - Start Over clears the manifest and imports the selected source from scratch.
+- Optionally delete source files after every imported file has been recorded.
 
 Supported formats currently match the original script:
 
@@ -78,6 +80,9 @@ Runtime Notes
 - The first import may trigger a macOS Photos add-only permission prompt.
 - The app does not do global duplicate detection. It only skips files already
   recorded in the current manifest when resuming an interrupted import.
+- `Delete Originals` removes source files only after the full import finishes.
+  It deletes files listed in the imported record, including files skipped during
+  a resumed import.
 - If Photos rejects imports, open Photos once manually, then run the import
   again.
 - The app is currently intended for direct Developer ID distribution rather than

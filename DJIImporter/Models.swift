@@ -56,6 +56,8 @@ enum ImportState: Hashable {
     case skipped
     case importing
     case finished(String?)
+    case deleted
+    case deleteFailed(String)
     case failed(String)
 
     var title: String {
@@ -68,6 +70,10 @@ enum ImportState: Hashable {
             return "Importing"
         case .finished:
             return "Done"
+        case .deleted:
+            return "Deleted"
+        case .deleteFailed:
+            return "Delete Failed"
         case .failed:
             return "Failed"
         }
@@ -101,6 +107,7 @@ struct ImportProgressState: Equatable {
     var completed: Int = 0
     var succeeded: Int = 0
     var skipped: Int = 0
+    var deleted: Int = 0
     var failed: Int = 0
     var currentFile: String?
 

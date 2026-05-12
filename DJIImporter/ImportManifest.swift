@@ -20,6 +20,7 @@ struct ImportManifest: Codable, Equatable {
 }
 
 struct ImportManifestItem: Codable, Equatable {
+    var resumeKey: String
     var relativePath: String
     var size: Int64
     var modificationDate: Date?
@@ -39,19 +40,35 @@ enum ImportManifestError: LocalizedError {
 }
 
 final class ImportManifestStore {
+    private static let readChunkSize = 64 * 1024
+
     private let fileManager: FileManager
     private let manifestURL: URL
+    private let importedRecordsURL: URL
     private let encoder: JSONEncoder
+    private let recordEncoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init(fileManager: FileManager = .default, manifestURL: URL? = nil) {
+    init(
+        fileManager: FileManager = .default,
+        manifestURL: URL? = nil,
+        importedRecordsURL: URL? = nil
+    ) {
         self.fileManager = fileManager
         self.manifestURL = manifestURL ?? Self.defaultManifestURL(fileManager: fileManager)
+        self.importedRecordsURL = importedRecordsURL ?? self.manifestURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("imported-items.jsond")
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         self.encoder = encoder
+
+        let recordEncoder = JSONEncoder()
+        recordEncoder.outputFormatting = [.sortedKeys]
+        recordEncoder.dateEncodingStrategy = .iso8601
+        self.recordEncoder = recordEncoder
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -64,7 +81,20 @@ final class ImportManifestStore {
         }
 
         let data = try Data(contentsOf: manifestURL)
-        return try decoder.decode(ImportManifest.self, from: data)
+        let metadata = try decoder.decode(ImportManifestMetadata.self, from: data)
+        var importedItems = try loadImportedItems()
+
+        if importedItems.isEmpty {
+            importedItems = legacyImportedItems(from: data)
+        }
+
+        return ImportManifest(
+            sourceRoot: metadata.sourceRoot,
+            sourceName: metadata.sourceName,
+            startedAt: metadata.startedAt,
+            updatedAt: metadata.updatedAt,
+            importedItems: importedItems
+        )
     }
 
     func loadMatching(sourceRoot: URL) throws -> ImportManifest? {
@@ -85,16 +115,136 @@ final class ImportManifestStore {
             withIntermediateDirectories: true
         )
 
-        var updatedManifest = manifest
-        updatedManifest.updatedAt = Date()
-        let data = try encoder.encode(updatedManifest)
+        let metadata = ImportManifestMetadata(
+            sourceRoot: manifest.sourceRoot,
+            sourceName: manifest.sourceName,
+            startedAt: manifest.startedAt,
+            updatedAt: Date()
+        )
+        let data = try encoder.encode(metadata)
         try data.write(to: manifestURL, options: .atomic)
+    }
+
+    func appendImportedItems(
+        _ importedItems: [ImportManifestItem],
+        to manifest: inout ImportManifest
+    ) throws {
+        guard !importedItems.isEmpty else {
+            return
+        }
+
+        try fileManager.createDirectory(
+            at: importedRecordsURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        if !fileManager.fileExists(atPath: importedRecordsURL.path) {
+            fileManager.createFile(atPath: importedRecordsURL.path, contents: nil)
+        }
+
+        let handle = try FileHandle(forWritingTo: importedRecordsURL)
+        defer {
+            try? handle.close()
+        }
+
+        try handle.seekToEnd()
+
+        for item in importedItems {
+            var line = try recordEncoder.encode(item)
+            line.append(0x0A)
+            try handle.write(contentsOf: line)
+            manifest.importedItems[item.resumeKey] = item
+        }
+
+        manifest.updatedAt = Date()
+        try save(manifest)
     }
 
     func reset(sourceRoot: URL, sourceName: String) throws -> ImportManifest {
         let manifest = ImportManifest.fresh(sourceRoot: sourceRoot, sourceName: sourceName)
+        if fileManager.fileExists(atPath: importedRecordsURL.path) {
+            try fileManager.removeItem(at: importedRecordsURL)
+        }
         try save(manifest)
         return manifest
+    }
+
+    private func loadImportedItems() throws -> [String: ImportManifestItem] {
+        guard fileManager.fileExists(atPath: importedRecordsURL.path) else {
+            return [:]
+        }
+
+        let handle = try FileHandle(forReadingFrom: importedRecordsURL)
+        defer {
+            try? handle.close()
+        }
+
+        var importedItems: [String: ImportManifestItem] = [:]
+        var buffer = Data()
+
+        while true {
+            let chunk = try handle.read(upToCount: Self.readChunkSize) ?? Data()
+            if chunk.isEmpty {
+                break
+            }
+
+            buffer.append(chunk)
+            try decodeCompleteLines(from: &buffer, into: &importedItems)
+        }
+
+        if !buffer.isEmpty, let item = try? decodeImportedItemLine(buffer) {
+            importedItems[item.resumeKey] = item
+        }
+
+        return importedItems
+    }
+
+    private func decodeCompleteLines(
+        from buffer: inout Data,
+        into importedItems: inout [String: ImportManifestItem]
+    ) throws {
+        while let newlineIndex = buffer.firstIndex(of: 0x0A) {
+            let line = buffer[..<newlineIndex]
+            if let item = try decodeImportedItemLine(Data(line)) {
+                importedItems[item.resumeKey] = item
+            }
+            buffer.removeSubrange(buffer.startIndex...newlineIndex)
+        }
+    }
+
+    private func decodeImportedItemLine(_ lineData: Data) throws -> ImportManifestItem? {
+        var line = lineData
+        while let last = line.last, last == 0x0D || last == 0x0A {
+            line.removeLast()
+        }
+
+        guard !line.isEmpty else {
+            return nil
+        }
+
+        return try decoder.decode(ImportManifestItem.self, from: line)
+    }
+
+    private func legacyImportedItems(from data: Data) -> [String: ImportManifestItem] {
+        guard let legacyManifest = try? decoder.decode(LegacyImportManifest.self, from: data) else {
+            return [:]
+        }
+
+        return Dictionary(
+            uniqueKeysWithValues: legacyManifest.importedItems.map { resumeKey, item in
+                (
+                    resumeKey,
+                    ImportManifestItem(
+                        resumeKey: resumeKey,
+                        relativePath: item.relativePath,
+                        size: item.size,
+                        modificationDate: item.modificationDate,
+                        localIdentifier: item.localIdentifier,
+                        importedAt: item.importedAt
+                    )
+                )
+            }
+        )
     }
 
     private static func defaultManifestURL(fileManager: FileManager) -> URL {
@@ -111,4 +261,23 @@ final class ImportManifestStore {
             .appendingPathComponent("Library/Application Support/DJIImporter", isDirectory: true)
             .appendingPathComponent("import-manifest.json")
     }
+}
+
+private struct ImportManifestMetadata: Codable {
+    var sourceRoot: String
+    var sourceName: String
+    var startedAt: Date
+    var updatedAt: Date
+}
+
+private struct LegacyImportManifest: Decodable {
+    var importedItems: [String: LegacyImportManifestItem]
+}
+
+private struct LegacyImportManifestItem: Decodable {
+    var relativePath: String
+    var size: Int64
+    var modificationDate: Date?
+    var localIdentifier: String
+    var importedAt: Date
 }
