@@ -3,6 +3,7 @@ import Photos
 
 enum PhotoKitImportError: LocalizedError {
     case accessDenied(PHAuthorizationStatus)
+    case invalidPrivacyAuthorization
     case unsupportedMedia(MediaItem)
     case missingPlaceholder(MediaItem)
     case partialImport(expected: Int, actual: Int)
@@ -12,6 +13,8 @@ enum PhotoKitImportError: LocalizedError {
         switch self {
         case .accessDenied(let status):
             return "Photos add permission was not granted (\(status))."
+        case .invalidPrivacyAuthorization:
+            return "Photos privacy authorization is invalid. Quit DJI Importer, rebuild or reinstall a signed app, run `tccutil reset Photos com.jjy.DJIImporter`, then launch the app and grant Photos permission again."
         case .unsupportedMedia(let media):
             return "Unsupported media type: \(media.relativePath)"
         case .missingPlaceholder(let media):
@@ -91,7 +94,11 @@ enum PhotoKitImporter {
                 }
 
                 if let error {
-                    continuation.resume(throwing: error)
+                    if isInvalidTCCAuthorization(error) {
+                        continuation.resume(throwing: PhotoKitImportError.invalidPrivacyAuthorization)
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                     return
                 }
 
@@ -114,5 +121,12 @@ enum PhotoKitImporter {
                 continuation.resume(returning: importedAssets)
             }
         }
+    }
+
+    private static func isInvalidTCCAuthorization(_ error: Error) -> Bool {
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("tcc authorization")
+            || message.contains("valid tcc")
+            || message.contains("privacy authorization")
     }
 }

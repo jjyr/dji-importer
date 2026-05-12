@@ -16,12 +16,13 @@ usage() {
   cat <<'EOF'
 Usage: Scripts/release_github.sh [--dry-run]
 
-Builds the unsigned macOS app, zips DJIImporter.app, writes sha256 output, and
+Builds the signed macOS app, zips DJIImporter.app, writes sha256 output, and
 creates or updates the matching GitHub release asset.
 
 Environment:
   VERSION=0.1.0                 Override MARKETING_VERSION from the Xcode project.
   GITHUB_REPOSITORY=owner/name  Override GitHub repository. Default: jjyr/dji-importer.
+  CODE_SIGN_IDENTITY=-          Override signing identity. Default: ad-hoc signing.
   ALLOW_DIRTY=1                 Allow releasing with a dirty git worktree.
 EOF
 }
@@ -53,6 +54,7 @@ require_command() {
 }
 
 require_command xcodebuild
+require_command codesign
 require_command ditto
 require_command shasum
 require_command gh
@@ -69,6 +71,7 @@ if [[ -z "$VERSION" ]]; then
   echo "Could not determine MARKETING_VERSION from $PROJECT/project.pbxproj" >&2
   exit 1
 fi
+CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 
 TAG="v${VERSION}"
 APP_PATH="${DERIVED_DATA_PATH}/Build/Products/${CONFIGURATION}/${APP_NAME}.app"
@@ -87,13 +90,17 @@ xcodebuild \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
+  CODE_SIGNING_ALLOWED=YES \
+  CODE_SIGNING_REQUIRED=YES \
   build
 
 if [[ ! -d "$APP_PATH" ]]; then
   echo "Build did not produce expected app: $APP_PATH" >&2
   exit 1
 fi
+
+codesign --verify --deep --strict "$APP_PATH"
 
 mkdir -p "$DIST_DIR"
 rm -f "$ZIP_PATH" "$SHA_PATH"
@@ -115,7 +122,7 @@ trap 'rm -f "$NOTES_FILE"' EXIT
 cat > "$NOTES_FILE" <<EOF
 DJI Importer ${VERSION}
 
-- Unsigned macOS app build for direct distribution.
+- Signed macOS app build for direct distribution.
 - Imports JPG, JPEG, and MP4 files into Apple Photos.
 - Photos duplicate detection is enabled during import.
 

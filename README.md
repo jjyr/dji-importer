@@ -48,7 +48,9 @@ xcodebuild \
   -scheme DJIImporter \
   -configuration Debug \
   -derivedDataPath .build/DerivedData \
-  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGN_IDENTITY=- \
+  CODE_SIGNING_ALLOWED=YES \
+  CODE_SIGNING_REQUIRED=YES \
   build
 ```
 
@@ -68,16 +70,23 @@ Create or update a GitHub release for the current app version:
 Scripts/release_github.sh
 ```
 
-The script builds the unsigned Release app, creates `dist/DJIImporter.app.zip`,
+The script builds the signed Release app, creates `dist/DJIImporter.app.zip`,
 writes `dist/DJIImporter.app.zip.sha256`, and uploads both files to the
-`v<MARKETING_VERSION>` GitHub release. The resulting sha256 must match the
-Homebrew cask.
+`v<MARKETING_VERSION>` GitHub release. By default it uses ad-hoc signing
+(`CODE_SIGN_IDENTITY=-`), which is enough for macOS privacy services to attach
+Photos permission to the app bundle identity during local testing. For public
+distribution, pass a Developer ID identity and notarize the artifact. The
+resulting sha256 must match the Homebrew cask.
 
 
 Runtime Notes
 -------------
 
 - The first import may trigger a macOS Photos add-only permission prompt.
+- If import fails with `Unauthorized access: client does not have valid TCC
+  authorization`, rebuild with signing enabled, quit the app, run
+  `tccutil reset Photos com.jjy.DJIImporter`, then launch the signed app and
+  grant Photos permission again.
 - The app does not do global duplicate detection. It only skips files already
   recorded in the current manifest when resuming an interrupted import.
 - `Delete Originals` removes source files only after the full import finishes.
