@@ -85,7 +85,7 @@ Runtime Notes
 - The first import may trigger a macOS Photos add-only permission prompt.
 - If import fails with `Unauthorized access: client does not have valid TCC
   authorization`, rebuild with signing enabled, quit the app, run
-  `tccutil reset Photos com.jjy.DJIImporter`, then launch the signed app and
+  `tccutil reset PhotosAdd com.jjy.DJIImporter`, then launch the signed app and
   grant Photos permission again.
 - The app does not do global duplicate detection. It only skips files already
   recorded in the current manifest when resuming an interrupted import.

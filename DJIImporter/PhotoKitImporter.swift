@@ -12,9 +12,9 @@ enum PhotoKitImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessDenied(let status):
-            return "Photos add permission was not granted (\(status))."
+            return Self.accessDeniedMessage(for: status)
         case .invalidPrivacyAuthorization:
-            return "Photos privacy authorization is invalid. Quit DJI Importer, rebuild or reinstall a signed app, run `tccutil reset Photos com.jjy.DJIImporter`, then launch the app and grant Photos permission again."
+            return "Photos privacy authorization is invalid. Quit DJI Importer, rebuild or reinstall a signed app, run `tccutil reset PhotosAdd com.jjy.DJIImporter`, then launch the app and grant Photos permission again."
         case .unsupportedMedia(let media):
             return "Unsupported media type: \(media.relativePath)"
         case .missingPlaceholder(let media):
@@ -23,6 +23,23 @@ enum PhotoKitImportError: LocalizedError {
             return "Photos reported a partial import: \(actual) of \(expected) assets."
         case .cancelled:
             return "Import cancelled."
+        }
+    }
+
+    private static func accessDeniedMessage(for status: PHAuthorizationStatus) -> String {
+        switch status {
+        case .denied:
+            return "Photos add permission is denied. Enable DJI Importer in System Settings > Privacy & Security > Photos, or run `tccutil reset PhotosAdd com.jjy.DJIImporter` and grant access again."
+        case .restricted:
+            return "Photos access is restricted by macOS policy, so DJI Importer cannot add media to Photos."
+        case .notDetermined:
+            return "Photos permission was not granted. Relaunch DJI Importer and approve the Photos prompt."
+        case .limited:
+            return "Photos permission is limited. Allow DJI Importer to add photos in System Settings > Privacy & Security > Photos."
+        case .authorized:
+            return "Photos add permission was not granted."
+        @unknown default:
+            return "Photos add permission was not granted (\(status))."
         }
     }
 }
