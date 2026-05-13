@@ -17,6 +17,7 @@ final class ImportViewModel: ObservableObject {
     @Published private(set) var progress = ImportProgressState.empty
     @Published private(set) var statusMessage = "Connect DJI Pocket 3 or choose a folder."
     @Published private(set) var lastError: String?
+    @Published private(set) var canOpenPhotosSettings = false
     @Published var deleteSourceFilesAfterImport = false
 
     private let manifestStore = ImportManifestStore()
@@ -113,6 +114,7 @@ final class ImportViewModel: ObservableObject {
         progress = .empty
         canResumeImport = false
         activeManifest = nil
+        canOpenPhotosSettings = false
 
         guard let selectedVolume else {
             mediaFiles = []
@@ -145,6 +147,7 @@ final class ImportViewModel: ObservableObject {
 
                 self?.mediaFiles = []
                 self?.lastError = error.localizedDescription
+                self?.canOpenPhotosSettings = false
                 self?.statusMessage = "Scan failed."
             }
 
@@ -165,6 +168,14 @@ final class ImportViewModel: ObservableObject {
         statusMessage = "Cancelling after the current batch..."
     }
 
+    func openPhotosSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos") else {
+            return
+        }
+
+        NSWorkspace.shared.open(url)
+    }
+
     private func startImport(mode: ImportMode) {
         guard !isScanning, !isImporting, !mediaFiles.isEmpty else {
             return
@@ -182,6 +193,7 @@ final class ImportViewModel: ObservableObject {
 
         isImporting = true
         lastError = nil
+        canOpenPhotosSettings = false
 
         do {
             var manifest = try manifest(for: mode, selectedVolume: selectedVolume)
@@ -293,9 +305,11 @@ final class ImportViewModel: ObservableObject {
                 progress.failed += deletionResult.failures.count
                 statusMessage = deletionStatus(for: deletionResult)
                 lastError = deletionResult.errorMessage
+                canOpenPhotosSettings = false
                 canResumeImport = false
             } else {
                 statusMessage = "Import complete."
+                canOpenPhotosSettings = false
                 canResumeImport = false
             }
         } catch {
@@ -309,6 +323,7 @@ final class ImportViewModel: ObservableObject {
                 return false
             }.count
             lastError = error.localizedDescription
+            canOpenPhotosSettings = Self.isPhotosAuthorizationError(error)
             statusMessage = "Import failed. Resume Import will retry unfinished files."
 
             if let activeManifest {
@@ -472,6 +487,19 @@ final class ImportViewModel: ObservableObject {
         }
 
         return [selectedVolume] + detectedVolumes
+    }
+
+    private static func isPhotosAuthorizationError(_ error: Error) -> Bool {
+        guard let error = error as? PhotoKitImportError else {
+            return false
+        }
+
+        switch error {
+        case .accessDenied, .invalidPrivacyAuthorization:
+            return true
+        case .unsupportedMedia, .missingPlaceholder, .partialImport, .cancelled:
+            return false
+        }
     }
 }
 

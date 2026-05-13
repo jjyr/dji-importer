@@ -148,19 +148,14 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
 
-                Menu {
-                    Button(role: .destructive) {
-                        viewModel.startOverImport()
-                    } label: {
-                        Label("Start Over", systemImage: "arrow.counterclockwise")
-                    }
-                    .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
+                Button(role: .destructive) {
+                    viewModel.startOverImport()
                 } label: {
-                    Image(systemName: "chevron.down")
+                    Label("Start Over", systemImage: "arrow.counterclockwise")
                 }
-                .menuStyle(.borderlessButton)
+                .buttonStyle(.bordered)
                 .disabled(viewModel.mediaFiles.isEmpty || viewModel.isScanning)
-                .help("Import options")
+                .help("Clear the manifest and import this source from scratch")
             }
         }
         .padding(20)
@@ -260,6 +255,15 @@ struct ContentView: View {
                     .lineLimit(2)
 
                 Spacer()
+
+                if viewModel.canOpenPhotosSettings {
+                    Button {
+                        viewModel.openPhotosSettings()
+                    } label: {
+                        Label("Open Photos Settings", systemImage: "gearshape")
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
             .font(.callout)
         }

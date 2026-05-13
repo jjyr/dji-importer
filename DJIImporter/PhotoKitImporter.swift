@@ -14,7 +14,7 @@ enum PhotoKitImportError: LocalizedError {
         case .accessDenied(let status):
             return Self.accessDeniedMessage(for: status)
         case .invalidPrivacyAuthorization:
-            return "Photos privacy authorization is invalid. Quit DJI Importer, rebuild or reinstall a signed app, run `tccutil reset PhotosAdd com.jjy.DJIImporter`, then launch the app and grant Photos permission again."
+            return "Photos privacy authorization is invalid. Reinstall a signed app, then enable DJI Importer in System Settings > Privacy & Security > Photos."
         case .unsupportedMedia(let media):
             return "Unsupported media type: \(media.relativePath)"
         case .missingPlaceholder(let media):
@@ -29,7 +29,7 @@ enum PhotoKitImportError: LocalizedError {
     private static func accessDeniedMessage(for status: PHAuthorizationStatus) -> String {
         switch status {
         case .denied:
-            return "Photos add permission is denied. Enable DJI Importer in System Settings > Privacy & Security > Photos, or run `tccutil reset PhotosAdd com.jjy.DJIImporter` and grant access again."
+            return "Photos add permission is denied. Enable DJI Importer in System Settings > Privacy & Security > Photos. If DJI Importer is missing there, quit the app and run `tccutil reset PhotosAdd com.jjy.DJIImporter`."
         case .restricted:
             return "Photos access is restricted by macOS policy, so DJI Importer cannot add media to Photos."
         case .notDetermined:
@@ -47,21 +47,23 @@ enum PhotoKitImportError: LocalizedError {
 enum PhotoKitImporter {
     static func requestAddPermission() async throws {
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        switch status {
-        case .authorized:
-            return
-        case .notDetermined:
-            let requestedStatus = await withCheckedContinuation { continuation in
-                PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-                    continuation.resume(returning: status)
-                }
-            }
 
-            guard requestedStatus == .authorized else {
-                throw PhotoKitImportError.accessDenied(requestedStatus)
-            }
-        default:
+        if status == .authorized {
+            return
+        }
+
+        if status == .restricted {
             throw PhotoKitImportError.accessDenied(status)
+        }
+
+        let requestedStatus = await withCheckedContinuation { continuation in
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+                continuation.resume(returning: status)
+            }
+        }
+
+        guard requestedStatus == .authorized else {
+            throw PhotoKitImportError.accessDenied(requestedStatus)
         }
     }
 
