@@ -18,6 +18,8 @@ final class ImportViewModel: ObservableObject {
     @Published private(set) var statusMessage = "Connect DJI Pocket 3 or choose a folder."
     @Published private(set) var lastError: String?
     @Published private(set) var canOpenPhotosSettings = false
+    @Published private(set) var canResetPhotosPermission = false
+    @Published private(set) var isResettingPhotosPermission = false
     @Published var deleteSourceFilesAfterImport = false
 
     private let manifestStore = ImportManifestStore()
@@ -114,7 +116,7 @@ final class ImportViewModel: ObservableObject {
         progress = .empty
         canResumeImport = false
         activeManifest = nil
-        canOpenPhotosSettings = false
+        clearPhotosPermissionActions()
 
         guard let selectedVolume else {
             mediaFiles = []
@@ -147,7 +149,7 @@ final class ImportViewModel: ObservableObject {
 
                 self?.mediaFiles = []
                 self?.lastError = error.localizedDescription
-                self?.canOpenPhotosSettings = false
+                self?.clearPhotosPermissionActions()
                 self?.statusMessage = "Scan failed."
             }
 
@@ -176,6 +178,35 @@ final class ImportViewModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    func resetPhotosPermission() {
+        guard !isResettingPhotosPermission else {
+            return
+        }
+
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.jjy.DJIImporter"
+        isResettingPhotosPermission = true
+        lastError = nil
+        statusMessage = "Resetting Photos permission..."
+
+        Task { [weak self] in
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try PhotosPermissionResetter.reset(bundleIdentifier: bundleIdentifier)
+                }.value
+
+                self?.statusMessage = "Photos permission was reset. Start import again and approve the macOS prompt."
+                self?.clearPhotosPermissionActions()
+            } catch {
+                self?.lastError = error.localizedDescription
+                self?.statusMessage = "Photos permission reset failed."
+                self?.canOpenPhotosSettings = true
+                self?.canResetPhotosPermission = true
+            }
+
+            self?.isResettingPhotosPermission = false
+        }
+    }
+
     private func startImport(mode: ImportMode) {
         guard !isScanning, !isImporting, !mediaFiles.isEmpty else {
             return
@@ -193,7 +224,7 @@ final class ImportViewModel: ObservableObject {
 
         isImporting = true
         lastError = nil
-        canOpenPhotosSettings = false
+        clearPhotosPermissionActions()
 
         do {
             var manifest = try manifest(for: mode, selectedVolume: selectedVolume)
@@ -305,11 +336,11 @@ final class ImportViewModel: ObservableObject {
                 progress.failed += deletionResult.failures.count
                 statusMessage = deletionStatus(for: deletionResult)
                 lastError = deletionResult.errorMessage
-                canOpenPhotosSettings = false
+                clearPhotosPermissionActions()
                 canResumeImport = false
             } else {
                 statusMessage = "Import complete."
-                canOpenPhotosSettings = false
+                clearPhotosPermissionActions()
                 canResumeImport = false
             }
         } catch {
@@ -323,7 +354,9 @@ final class ImportViewModel: ObservableObject {
                 return false
             }.count
             lastError = error.localizedDescription
-            canOpenPhotosSettings = Self.isPhotosAuthorizationError(error)
+            let isPhotosAuthorizationError = Self.isPhotosAuthorizationError(error)
+            canOpenPhotosSettings = isPhotosAuthorizationError
+            canResetPhotosPermission = isPhotosAuthorizationError
             statusMessage = "Import failed. Resume Import will retry unfinished files."
 
             if let activeManifest {
@@ -489,6 +522,11 @@ final class ImportViewModel: ObservableObject {
         return [selectedVolume] + detectedVolumes
     }
 
+    private func clearPhotosPermissionActions() {
+        canOpenPhotosSettings = false
+        canResetPhotosPermission = false
+    }
+
     private static func isPhotosAuthorizationError(_ error: Error) -> Bool {
         guard let error = error as? PhotoKitImportError else {
             return false
@@ -518,5 +556,48 @@ private struct SourceDeletionResult {
         }
 
         return "Import complete, but could not delete: \(failures.prefix(3).joined(separator: ", "))"
+    }
+}
+
+private enum PhotosPermissionResetter {
+    static func reset(bundleIdentifier: String) throws {
+        try reset(service: "PhotosAdd", bundleIdentifier: bundleIdentifier)
+        try reset(service: "Photos", bundleIdentifier: bundleIdentifier)
+    }
+
+    private static func reset(service: String, bundleIdentifier: String) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", service, bundleIdentifier]
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let output = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorOutput = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let message = String(data: output + errorOutput, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            throw PhotosPermissionResetError(service: service, message: message)
+        }
+    }
+}
+
+private struct PhotosPermissionResetError: LocalizedError {
+    let service: String
+    let message: String?
+
+    var errorDescription: String? {
+        if let message, !message.isEmpty {
+            return "Could not reset \(service) permission: \(message)"
+        }
+
+        return "Could not reset \(service) permission."
     }
 }

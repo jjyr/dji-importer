@@ -37,6 +37,7 @@
 		200000000000000000000011 /* DJIImporter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DJIImporter.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		20000000000000000000000A /* BatchTuner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchTuner.swift; sourceTree = "<group>"; };
 		20000000000000000000000B /* ImportManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportManifest.swift; sourceTree = "<group>"; };
+		20000000000000000000000C /* DJIImporter.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DJIImporter.entitlements; sourceTree = "<group>"; };
 		C00000000000000000000001 /* BatchTunerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchTunerTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000006 /* ImportManifestStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportManifestStoreTests.swift; sourceTree = "<group>"; };
 		C00000000000000000000002 /* DJIImporterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DJIImporterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -86,6 +87,7 @@
 				20000000000000000000000B /* ImportManifest.swift */,
 				200000000000000000000008 /* Formatters.swift */,
 				200000000000000000000010 /* Info.plist */,
+				20000000000000000000000C /* DJIImporter.entitlements */,
 				200000000000000000000009 /* Assets.xcassets */,
 			);
 			path = DJIImporter;
@@ -376,6 +378,7 @@
 		900000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DJIImporter/DJIImporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -389,7 +392,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
@@ -401,6 +404,7 @@
 		900000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DJIImporter/DJIImporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -414,7 +418,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
@@ -438,7 +442,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporterTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
@@ -463,7 +467,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.1.3;
+				MARKETING_VERSION = 0.1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jjy.DJIImporterTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;

@@ -257,6 +257,16 @@ struct ContentView: View {
                 Spacer()
 
                 if viewModel.canOpenPhotosSettings {
+                    if viewModel.canResetPhotosPermission {
+                        Button {
+                            viewModel.resetPhotosPermission()
+                        } label: {
+                            Label("Reset Photos Permission", systemImage: "arrow.counterclockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.isResettingPhotosPermission)
+                    }
+
                     Button {
                         viewModel.openPhotosSettings()
                     } label: {

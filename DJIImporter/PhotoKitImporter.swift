@@ -1,8 +1,9 @@
+import AppKit
 import Foundation
 import Photos
 
 enum PhotoKitImportError: LocalizedError {
-    case accessDenied(PHAuthorizationStatus)
+    case accessDenied(PhotosAuthorizationSnapshot)
     case invalidPrivacyAuthorization
     case unsupportedMedia(MediaItem)
     case missingPlaceholder(MediaItem)
@@ -26,47 +27,112 @@ enum PhotoKitImportError: LocalizedError {
         }
     }
 
-    private static func accessDeniedMessage(for status: PHAuthorizationStatus) -> String {
-        switch status {
-        case .denied:
-            return "Photos add permission is denied. Enable DJI Importer in System Settings > Privacy & Security > Photos. If DJI Importer is missing there, quit the app and run `tccutil reset PhotosAdd com.jjy.DJIImporter`."
-        case .restricted:
-            return "Photos access is restricted by macOS policy, so DJI Importer cannot add media to Photos."
-        case .notDetermined:
-            return "Photos permission was not granted. Relaunch DJI Importer and approve the Photos prompt."
-        case .limited:
-            return "Photos permission is limited. Allow DJI Importer to add photos in System Settings > Privacy & Security > Photos."
-        case .authorized:
-            return "Photos add permission was not granted."
+    private static func accessDeniedMessage(for snapshot: PhotosAuthorizationSnapshot) -> String {
+        if snapshot.addOnly == .restricted || snapshot.readWrite == .restricted {
+            return "Photos access is restricted by macOS policy, so DJI Importer cannot add media to Photos. \(snapshot.summary)"
+        }
+
+        if snapshot.addOnly == .denied || snapshot.readWrite == .denied {
+            return "Photos permission is denied. Quit DJI Importer, use Reset Photos Permission, then relaunch and approve the macOS prompt. \(snapshot.summary)"
+        }
+
+        return "Photos permission was not granted. Relaunch DJI Importer and approve the macOS prompt. \(snapshot.summary)"
+    }
+}
+
+extension PhotoKitImporter {
+    @MainActor
+    static func requestAddPermission() async throws {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let initialAddOnlyStatus = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        if initialAddOnlyStatus == .authorized {
+            return
+        }
+
+        if initialAddOnlyStatus == .notDetermined {
+            let requestedAddOnlyStatus = await requestAuthorization(for: .addOnly)
+            if requestedAddOnlyStatus == .authorized {
+                return
+            }
+        }
+
+        let initialReadWriteStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if Self.allowsImport(readWriteStatus: initialReadWriteStatus) {
+            return
+        }
+
+        if initialReadWriteStatus == .notDetermined {
+            let requestedReadWriteStatus = await requestAuthorization(for: .readWrite)
+            if Self.allowsImport(readWriteStatus: requestedReadWriteStatus) {
+                return
+            }
+        }
+
+        throw PhotoKitImportError.accessDenied(PhotosAuthorizationSnapshot.current())
+    }
+
+    @MainActor
+    private static func requestAuthorization(for accessLevel: PHAccessLevel) async -> PHAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            PHPhotoLibrary.requestAuthorization(for: accessLevel) { status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    private static func allowsImport(readWriteStatus: PHAuthorizationStatus) -> Bool {
+        switch readWriteStatus {
+        case .authorized, .limited:
+            return true
+        case .notDetermined, .restricted, .denied:
+            return false
         @unknown default:
-            return "Photos add permission was not granted (\(status))."
+            return false
+        }
+    }
+}
+
+struct PhotosAuthorizationSnapshot {
+    let addOnly: PHAuthorizationStatus
+    let readWrite: PHAuthorizationStatus
+    let bundleIdentifier: String
+    let bundlePath: String
+
+    var summary: String {
+        "Status: add-only=\(addOnly.diagnosticText), read-write=\(readWrite.diagnosticText), bundle=\(bundleIdentifier), path=\(bundlePath)"
+    }
+
+    static func current() -> PhotosAuthorizationSnapshot {
+        PhotosAuthorizationSnapshot(
+            addOnly: PHPhotoLibrary.authorizationStatus(for: .addOnly),
+            readWrite: PHPhotoLibrary.authorizationStatus(for: .readWrite),
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown",
+            bundlePath: Bundle.main.bundleURL.path
+        )
+    }
+}
+
+private extension PHAuthorizationStatus {
+    var diagnosticText: String {
+        switch self {
+        case .notDetermined:
+            return "notDetermined"
+        case .restricted:
+            return "restricted"
+        case .denied:
+            return "denied"
+        case .authorized:
+            return "authorized"
+        case .limited:
+            return "limited"
+        @unknown default:
+            return "unknown(\(rawValue))"
         }
     }
 }
 
 enum PhotoKitImporter {
-    static func requestAddPermission() async throws {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-
-        if status == .authorized {
-            return
-        }
-
-        if status == .restricted {
-            throw PhotoKitImportError.accessDenied(status)
-        }
-
-        let requestedStatus = await withCheckedContinuation { continuation in
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-                continuation.resume(returning: status)
-            }
-        }
-
-        guard requestedStatus == .authorized else {
-            throw PhotoKitImportError.accessDenied(requestedStatus)
-        }
-    }
-
     static func importBatch(_ mediaItems: [MediaItem]) async throws -> [PhotoKitImportedAsset] {
         try Task.checkCancellation()
 
