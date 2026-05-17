@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = ImportViewModel()
     @State private var selectedMediaIDs = Set<MediaItem.ID>()
+    @State private var mediaSortOrder = [KeyPathComparator(\MediaItem.name)]
 
     var body: some View {
         NavigationSplitView {
@@ -171,8 +172,8 @@ struct ContentView: View {
             EmptyMediaView(hasError: viewModel.lastError != nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            Table(viewModel.mediaFiles, selection: $selectedMediaIDs) {
-                TableColumn("Name") { item in
+            Table(sortedMediaFiles, selection: $selectedMediaIDs, sortOrder: $mediaSortOrder) {
+                TableColumn("Name", value: \.name) { item in
                     HStack(spacing: 10) {
                         Image(systemName: item.kind.symbolName)
                             .foregroundStyle(.secondary)
@@ -189,21 +190,25 @@ struct ContentView: View {
                                 .truncationMode(.middle)
                         }
                     }
+                    .mediaFileDragSource(for: item)
                 }
                 .width(min: 300, ideal: 460)
 
-                TableColumn("Kind") { item in
+                TableColumn("Kind", value: \.kindSortValue) { item in
                     Text(item.kind.title)
+                        .mediaFileDragSource(for: item)
                 }
                 .width(80)
 
-                TableColumn("Size") { item in
+                TableColumn("Size", value: \.size) { item in
                     Text(item.size.fileSizeText)
+                        .mediaFileDragSource(for: item)
                 }
                 .width(90)
 
-                TableColumn("Status") { item in
+                TableColumn("Status", value: \.statusSortValue) { item in
                     StatusLabel(state: item.importState)
+                        .mediaFileDragSource(for: item)
                 }
                 .width(120)
             }
@@ -218,13 +223,17 @@ struct ContentView: View {
                 Button {
                     openContainingFolders(forIDs: selectedIDs)
                 } label: {
-                    Label("Open Folder", systemImage: "folder")
+                    Label("Show in Finder", systemImage: "folder")
                 }
                 .disabled(selectedIDs.isEmpty)
             } primaryAction: { selectedIDs in
                 openMediaItems(withIDs: selectedIDs)
             }
         }
+    }
+
+    private var sortedMediaFiles: [MediaItem] {
+        viewModel.mediaFiles.sorted(using: mediaSortOrder)
     }
 
     private func mediaItems(withIDs selectedIDs: Set<MediaItem.ID>) -> [MediaItem] {
@@ -313,6 +322,15 @@ struct ContentView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+}
+
+private extension View {
+    func mediaFileDragSource(for item: MediaItem) -> some View {
+        contentShape(Rectangle())
+            .onDrag {
+                NSItemProvider(contentsOf: item.url) ?? NSItemProvider(object: item.url as NSURL)
+            }
     }
 }
 

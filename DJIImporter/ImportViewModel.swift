@@ -188,12 +188,7 @@ final class ImportViewModel: ObservableObject {
     }
 
     func openContainingFolder(_ media: MediaItem) {
-        let folderURL = media.url.deletingLastPathComponent()
-        guard NSWorkspace.shared.open(folderURL) else {
-            lastError = "Could not open folder for \(media.relativePath)."
-            return
-        }
-
+        NSWorkspace.shared.activateFileViewerSelecting([media.url])
         lastError = nil
     }
 

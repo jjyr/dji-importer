@@ -109,6 +109,14 @@ struct MediaItem: Identifiable, Hashable {
     let kind: MediaKind
     var importState: ImportState = .pending
 
+    var kindSortValue: String {
+        kind.title
+    }
+
+    var statusSortValue: String {
+        importState.title
+    }
+
     var resumeKey: String {
         let modifiedMilliseconds = modificationDate.map {
             Int64(($0.timeIntervalSince1970 * 1000).rounded())
