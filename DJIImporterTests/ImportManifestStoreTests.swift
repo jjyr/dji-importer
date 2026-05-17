@@ -1,3 +1,4 @@
+import Photos
 import XCTest
 @testable import DJIImporter
 
@@ -63,6 +64,51 @@ final class ImportManifestStoreTests: XCTestCase {
         XCTAssertEqual(loadedManifest.importedItems, [:])
     }
 
+    func testAppendsSkippedItemsAsJsondAndLoadsReason() throws {
+        let manifestURL = temporaryDirectory.appendingPathComponent("import-manifest.json")
+        let importedRecordsURL = temporaryDirectory.appendingPathComponent("imported-items.jsond")
+        let store = ImportManifestStore(
+            manifestURL: manifestURL,
+            importedRecordsURL: importedRecordsURL
+        )
+        let sourceRoot = temporaryDirectory.appendingPathComponent("source", isDirectory: true)
+        var manifest = try store.reset(sourceRoot: sourceRoot, sourceName: "source")
+        let skippedItem = skippedItem(resumeKey: "DJI_0003.MP4|300|3")
+
+        try store.appendImportedItems([skippedItem], to: &manifest)
+
+        let loadedManifest = try XCTUnwrap(store.loadMatching(sourceRoot: sourceRoot))
+        XCTAssertEqual(loadedManifest.importedItems[skippedItem.resumeKey], skippedItem)
+        XCTAssertEqual(loadedManifest.importedItems[skippedItem.resumeKey]?.status, .skipped)
+        XCTAssertNil(loadedManifest.importedItems[skippedItem.resumeKey]?.localIdentifier)
+
+        let records = try String(contentsOf: importedRecordsURL, encoding: .utf8)
+        XCTAssertTrue(records.contains(#""status":"skipped""#))
+        XCTAssertTrue(records.contains(#""skippedReason":"Photos rejected this file""#))
+    }
+
+    func testLegacyJsondRecordWithoutStatusDecodesAsImported() throws {
+        let manifestURL = temporaryDirectory.appendingPathComponent("import-manifest.json")
+        let importedRecordsURL = temporaryDirectory.appendingPathComponent("imported-items.jsond")
+        let store = ImportManifestStore(
+            manifestURL: manifestURL,
+            importedRecordsURL: importedRecordsURL
+        )
+        let sourceRoot = temporaryDirectory.appendingPathComponent("source", isDirectory: true)
+        _ = try store.reset(sourceRoot: sourceRoot, sourceName: "source")
+
+        try """
+        {"importedAt":"1970-01-01T00:00:02Z","localIdentifier":"legacy-local","modificationDate":"1970-01-01T00:00:01Z","relativePath":"DJI_0001.JPG","resumeKey":"DJI_0001.JPG|100|1000","size":100}
+
+        """.write(to: importedRecordsURL, atomically: true, encoding: .utf8)
+
+        let loadedManifest = try XCTUnwrap(store.loadMatching(sourceRoot: sourceRoot))
+        let loadedItem = try XCTUnwrap(loadedManifest.importedItems["DJI_0001.JPG|100|1000"])
+        XCTAssertEqual(loadedItem.status, .imported)
+        XCTAssertEqual(loadedItem.localIdentifier, "legacy-local")
+        XCTAssertNil(loadedItem.skippedReason)
+    }
+
     func testIgnoresTrailingPartialJsondLine() throws {
         let manifestURL = temporaryDirectory.appendingPathComponent("import-manifest.json")
         let importedRecordsURL = temporaryDirectory.appendingPathComponent("imported-items.jsond")
@@ -84,6 +130,25 @@ final class ImportManifestStoreTests: XCTestCase {
         XCTAssertEqual(loadedManifest.importedItems, [completeItem.resumeKey: completeItem])
     }
 
+    func testPhotoKitError3302IsSkippable() {
+        let photosError = NSError(domain: PHPhotosErrorDomain, code: 3302)
+        let wrappedError = NSError(
+            domain: "DJIImporterTests",
+            code: 1,
+            userInfo: [NSUnderlyingErrorKey: photosError]
+        )
+        let detailedError = NSError(
+            domain: PHPhotosErrorDomain,
+            code: -1,
+            userInfo: [NSDetailedErrorsKey: [photosError]]
+        )
+
+        XCTAssertTrue(PhotoKitImporter.isSkippableImportError(photosError))
+        XCTAssertTrue(PhotoKitImporter.isSkippableImportError(wrappedError))
+        XCTAssertTrue(PhotoKitImporter.isSkippableImportError(detailedError))
+        XCTAssertFalse(PhotoKitImporter.isSkippableImportError(NSError(domain: PHPhotosErrorDomain, code: 3301)))
+    }
+
     private func importedItem(resumeKey: String) -> ImportManifestItem {
         ImportManifestItem(
             resumeKey: resumeKey,
@@ -92,6 +157,17 @@ final class ImportManifestStoreTests: XCTestCase {
             modificationDate: Date(timeIntervalSince1970: 1),
             localIdentifier: "local-\(resumeKey)",
             importedAt: Date(timeIntervalSince1970: 2)
+        )
+    }
+
+    private func skippedItem(resumeKey: String) -> ImportManifestItem {
+        ImportManifestItem(
+            resumeKey: resumeKey,
+            relativePath: resumeKey.components(separatedBy: "|")[0],
+            size: 100,
+            modificationDate: Date(timeIntervalSince1970: 1),
+            skippedReason: "Photos rejected this file",
+            skippedAt: Date(timeIntervalSince1970: 2)
         )
     }
 }

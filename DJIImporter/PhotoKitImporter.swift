@@ -133,6 +133,8 @@ private extension PHAuthorizationStatus {
 }
 
 enum PhotoKitImporter {
+    private static let unsupportedAssetErrorCode = 3302
+
     static func importBatch(_ mediaItems: [MediaItem]) async throws -> [PhotoKitImportedAsset] {
         try Task.checkCancellation()
 
@@ -208,10 +210,48 @@ enum PhotoKitImporter {
         }
     }
 
+    static func isSkippableImportError(_ error: Error) -> Bool {
+        photosError(in: error, matchingCode: unsupportedAssetErrorCode) != nil
+    }
+
+    static func skippableImportReason(for error: Error) -> String {
+        guard let photosError = photosError(in: error, matchingCode: unsupportedAssetErrorCode)
+            ?? photosError(in: error) else {
+            return "Photos rejected this file: \(error.localizedDescription)"
+        }
+
+        return "Photos rejected this file with PHPhotosErrorDomain error \(photosError.code): \(photosError.localizedDescription)"
+    }
+
     private static func isInvalidTCCAuthorization(_ error: Error) -> Bool {
         let message = (error as NSError).localizedDescription.lowercased()
         return message.contains("tcc authorization")
             || message.contains("valid tcc")
             || message.contains("privacy authorization")
+    }
+
+    private static func photosError(in error: Error, matchingCode code: Int? = nil) -> NSError? {
+        let error = error as NSError
+
+        if error.domain == PHPhotosErrorDomain && (code == nil || error.code == code) {
+            return error
+        }
+
+        for key in [NSUnderlyingErrorKey, NSMultipleUnderlyingErrorsKey, NSDetailedErrorsKey] {
+            if let underlyingError = error.userInfo[key] as? Error,
+               let photosError = photosError(in: underlyingError, matchingCode: code) {
+                return photosError
+            }
+
+            if let underlyingErrors = error.userInfo[key] as? [Error] {
+                for underlyingError in underlyingErrors {
+                    if let photosError = photosError(in: underlyingError, matchingCode: code) {
+                        return photosError
+                    }
+                }
+            }
+        }
+
+        return nil
     }
 }

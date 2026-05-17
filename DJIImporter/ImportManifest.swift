@@ -20,12 +20,71 @@ struct ImportManifest: Codable, Equatable {
 }
 
 struct ImportManifestItem: Codable, Equatable {
+    enum Status: String, Codable {
+        case imported
+        case skipped
+    }
+
     var resumeKey: String
     var relativePath: String
     var size: Int64
     var modificationDate: Date?
-    var localIdentifier: String
-    var importedAt: Date
+    var localIdentifier: String?
+    var importedAt: Date?
+    var skippedAt: Date?
+    var skippedReason: String?
+    var status: Status
+
+    init(
+        resumeKey: String,
+        relativePath: String,
+        size: Int64,
+        modificationDate: Date?,
+        localIdentifier: String,
+        importedAt: Date
+    ) {
+        self.resumeKey = resumeKey
+        self.relativePath = relativePath
+        self.size = size
+        self.modificationDate = modificationDate
+        self.localIdentifier = localIdentifier
+        self.importedAt = importedAt
+        self.skippedAt = nil
+        self.skippedReason = nil
+        self.status = .imported
+    }
+
+    init(
+        resumeKey: String,
+        relativePath: String,
+        size: Int64,
+        modificationDate: Date?,
+        skippedReason: String,
+        skippedAt: Date
+    ) {
+        self.resumeKey = resumeKey
+        self.relativePath = relativePath
+        self.size = size
+        self.modificationDate = modificationDate
+        self.localIdentifier = nil
+        self.importedAt = nil
+        self.skippedAt = skippedAt
+        self.skippedReason = skippedReason
+        self.status = .skipped
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        resumeKey = try container.decode(String.self, forKey: .resumeKey)
+        relativePath = try container.decode(String.self, forKey: .relativePath)
+        size = try container.decode(Int64.self, forKey: .size)
+        modificationDate = try container.decodeIfPresent(Date.self, forKey: .modificationDate)
+        localIdentifier = try container.decodeIfPresent(String.self, forKey: .localIdentifier)
+        importedAt = try container.decodeIfPresent(Date.self, forKey: .importedAt)
+        skippedAt = try container.decodeIfPresent(Date.self, forKey: .skippedAt)
+        skippedReason = try container.decodeIfPresent(String.self, forKey: .skippedReason)
+        status = try container.decodeIfPresent(Status.self, forKey: .status) ?? .imported
+    }
 }
 
 enum ImportManifestError: LocalizedError {

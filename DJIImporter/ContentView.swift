@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = ImportViewModel()
+    @State private var selectedMediaIDs = Set<MediaItem.ID>()
 
     var body: some View {
         NavigationSplitView {
@@ -170,7 +171,7 @@ struct ContentView: View {
             EmptyMediaView(hasError: viewModel.lastError != nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            Table(viewModel.mediaFiles) {
+            Table(viewModel.mediaFiles, selection: $selectedMediaIDs) {
                 TableColumn("Name") { item in
                     HStack(spacing: 10) {
                         Image(systemName: item.kind.symbolName)
@@ -206,6 +207,39 @@ struct ContentView: View {
                 }
                 .width(120)
             }
+            .contextMenu(forSelectionType: MediaItem.ID.self) { selectedIDs in
+                Button {
+                    openMediaItems(withIDs: selectedIDs)
+                } label: {
+                    Label("Open File", systemImage: "arrow.up.right.square")
+                }
+                .disabled(selectedIDs.isEmpty)
+
+                Button {
+                    openContainingFolders(forIDs: selectedIDs)
+                } label: {
+                    Label("Open Folder", systemImage: "folder")
+                }
+                .disabled(selectedIDs.isEmpty)
+            } primaryAction: { selectedIDs in
+                openMediaItems(withIDs: selectedIDs)
+            }
+        }
+    }
+
+    private func mediaItems(withIDs selectedIDs: Set<MediaItem.ID>) -> [MediaItem] {
+        viewModel.mediaFiles.filter { selectedIDs.contains($0.id) }
+    }
+
+    private func openMediaItems(withIDs selectedIDs: Set<MediaItem.ID>) {
+        for item in mediaItems(withIDs: selectedIDs) {
+            viewModel.openFile(item)
+        }
+    }
+
+    private func openContainingFolders(forIDs selectedIDs: Set<MediaItem.ID>) {
+        for item in mediaItems(withIDs: selectedIDs) {
+            viewModel.openContainingFolder(item)
         }
     }
 
@@ -344,8 +378,8 @@ private struct StatusLabel: View {
         switch state {
         case .pending:
             return "circle"
-        case .skipped:
-            return "forward.circle.fill"
+        case .skipped(let message):
+            return message == nil ? "forward.circle.fill" : "exclamationmark.circle.fill"
         case .importing:
             return "arrow.triangle.2.circlepath"
         case .finished:
@@ -363,8 +397,8 @@ private struct StatusLabel: View {
         switch state {
         case .pending:
             return .secondary
-        case .skipped:
-            return .secondary
+        case .skipped(let message):
+            return message == nil ? .secondary : .orange
         case .importing:
             return .blue
         case .finished:
@@ -382,8 +416,8 @@ private struct StatusLabel: View {
         switch state {
         case .pending:
             return "Ready to import"
-        case .skipped:
-            return "Already imported in the current manifest; skipped for resume"
+        case .skipped(let message):
+            return message ?? "Already imported in the current manifest; skipped for resume"
         case .importing:
             return "Importing into Photos"
         case .finished(let message):

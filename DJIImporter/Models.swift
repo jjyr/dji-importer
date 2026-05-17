@@ -53,7 +53,7 @@ enum MediaKind: String, Hashable {
 
 enum ImportState: Hashable {
     case pending
-    case skipped
+    case skipped(String?)
     case importing
     case finished(String?)
     case deleted
@@ -76,6 +76,22 @@ enum ImportState: Hashable {
             return "Delete Failed"
         case .failed:
             return "Failed"
+        }
+    }
+
+    var isSkipped: Bool {
+        if case .skipped = self {
+            return true
+        }
+        return false
+    }
+
+    var isFailed: Bool {
+        switch self {
+        case .deleteFailed, .failed:
+            return true
+        case .pending, .skipped, .importing, .finished, .deleted:
+            return false
         }
     }
 }

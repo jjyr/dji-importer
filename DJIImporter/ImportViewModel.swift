@@ -178,6 +178,25 @@ final class ImportViewModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    func openFile(_ media: MediaItem) {
+        guard NSWorkspace.shared.open(media.url) else {
+            lastError = "Could not open \(media.relativePath)."
+            return
+        }
+
+        lastError = nil
+    }
+
+    func openContainingFolder(_ media: MediaItem) {
+        let folderURL = media.url.deletingLastPathComponent()
+        guard NSWorkspace.shared.open(folderURL) else {
+            lastError = "Could not open folder for \(media.relativePath)."
+            return
+        }
+
+        lastError = nil
+    }
+
     func resetPhotosPermission() {
         guard !isResettingPhotosPermission else {
             return
@@ -237,7 +256,7 @@ final class ImportViewModel: ObservableObject {
                 applyManifest(manifest)
             }
 
-            let skipped = mediaFiles.filter { $0.importState == .skipped }.count
+            let skipped = mediaFiles.filter { $0.importState.isSkipped }.count
             progress = ImportProgressState(
                 total: mediaFiles.count,
                 completed: skipped,
@@ -282,48 +301,64 @@ final class ImportViewModel: ObservableObject {
                     statusMessage = "Importing batch of \(batch.count) files..."
 
                     let startedAt = Date()
-                    let importedAssets = try await PhotoKitImporter.importBatch(batch)
-                    let elapsed = max(Date().timeIntervalSince(startedAt), 0.001)
-                    let importedBytes = batch.reduce(Int64(0)) { $0 + $1.size }
+                    do {
+                        let importedAssets = try await PhotoKitImporter.importBatch(batch)
+                        let elapsed = max(Date().timeIntervalSince(startedAt), 0.001)
+                        let importedBytes = batch.reduce(Int64(0)) { $0 + $1.size }
 
-                    let localIdentifiersByKey = Dictionary(
-                        uniqueKeysWithValues: importedAssets.map { ($0.resumeKey, $0.localIdentifier) }
-                    )
-                    var importedManifestItems: [ImportManifestItem] = []
+                        let localIdentifiersByKey = Dictionary(
+                            uniqueKeysWithValues: importedAssets.map { ($0.resumeKey, $0.localIdentifier) }
+                        )
+                        var importedManifestItems: [ImportManifestItem] = []
 
-                    for index in batchIndexes {
-                        let media = mediaFiles[index]
-                        guard let localIdentifier = localIdentifiersByKey[media.resumeKey] else {
-                            continue
+                        for index in batchIndexes {
+                            let media = mediaFiles[index]
+                            guard let localIdentifier = localIdentifiersByKey[media.resumeKey] else {
+                                continue
+                            }
+
+                            mediaFiles[index].importState = .finished(localIdentifier)
+                            importedManifestItems.append(importedManifestItem(for: media, localIdentifier: localIdentifier))
                         }
 
-                        mediaFiles[index].importState = .finished(localIdentifier)
-                        importedManifestItems.append(
-                            ImportManifestItem(
-                                resumeKey: media.resumeKey,
-                                relativePath: media.relativePath,
-                                size: media.size,
-                                modificationDate: media.modificationDate,
-                                localIdentifier: localIdentifier,
-                                importedAt: Date()
-                            )
+                        try manifestStore.appendImportedItems(importedManifestItems, to: &manifest)
+                        activeManifest = manifest
+
+                        progress.completed += batch.count
+                        progress.succeeded += batch.count
+                        progress.currentFile = nil
+
+                        tuner.observe(bytes: importedBytes, seconds: elapsed)
+                        statusMessage = batchStatus(
+                            fileCount: batch.count,
+                            bytes: importedBytes,
+                            elapsed: elapsed,
+                            limits: tuner.limits
+                        )
+                    } catch {
+                        guard PhotoKitImporter.isSkippableImportError(error) else {
+                            throw error
+                        }
+
+                        for index in batchIndexes {
+                            mediaFiles[index].importState = .pending
+                        }
+
+                        statusMessage = "Photos rejected one file in this batch. Retrying \(batch.count) files one by one..."
+                        let result = try await importBatchOneByOneSkippingRejectedFiles(
+                            batchIndexes,
+                            manifest: &manifest
+                        )
+                        activeManifest = manifest
+                        progress.currentFile = nil
+
+                        let elapsed = max(Date().timeIntervalSince(startedAt), 0.001)
+                        statusMessage = fallbackBatchStatus(
+                            importedCount: result.importedCount,
+                            skippedCount: result.skippedCount,
+                            elapsed: elapsed
                         )
                     }
-
-                    try manifestStore.appendImportedItems(importedManifestItems, to: &manifest)
-                    activeManifest = manifest
-
-                    progress.completed += batch.count
-                    progress.succeeded += batch.count
-                    progress.currentFile = nil
-
-                    tuner.observe(bytes: importedBytes, seconds: elapsed)
-                    statusMessage = batchStatus(
-                        fileCount: batch.count,
-                        bytes: importedBytes,
-                        elapsed: elapsed,
-                        limits: tuner.limits
-                    )
                 }
             }
 
@@ -339,7 +374,7 @@ final class ImportViewModel: ObservableObject {
                 clearPhotosPermissionActions()
                 canResumeImport = false
             } else {
-                statusMessage = "Import complete."
+                statusMessage = importCompletionStatus()
                 clearPhotosPermissionActions()
                 canResumeImport = false
             }
@@ -347,12 +382,7 @@ final class ImportViewModel: ObservableObject {
             for index in mediaFiles.indices where mediaFiles[index].importState == .importing {
                 mediaFiles[index].importState = .failed(error.localizedDescription)
             }
-            progress.failed += mediaFiles.filter {
-                if case .failed = $0.importState {
-                    return true
-                }
-                return false
-            }.count
+            progress.failed = mediaFiles.filter { $0.importState.isFailed }.count
             lastError = error.localizedDescription
             let isPhotosAuthorizationError = Self.isPhotosAuthorizationError(error)
             canOpenPhotosSettings = isPhotosAuthorizationError
@@ -390,6 +420,79 @@ final class ImportViewModel: ObservableObject {
         }
     }
 
+    private func importBatchOneByOneSkippingRejectedFiles(
+        _ batchIndexes: [Array<MediaItem>.Index],
+        manifest: inout ImportManifest
+    ) async throws -> OneByOneImportResult {
+        var result = OneByOneImportResult()
+
+        for index in batchIndexes {
+            try Task.checkCancellation()
+
+            mediaFiles[index].importState = .importing
+            let media = mediaFiles[index]
+            progress.currentFile = media.relativePath
+
+            do {
+                let importedAssets = try await PhotoKitImporter.importBatch([media])
+                guard let importedAsset = importedAssets.first else {
+                    throw PhotoKitImportError.partialImport(expected: 1, actual: 0)
+                }
+
+                mediaFiles[index].importState = .finished(importedAsset.localIdentifier)
+                try manifestStore.appendImportedItems(
+                    [importedManifestItem(for: media, localIdentifier: importedAsset.localIdentifier)],
+                    to: &manifest
+                )
+                activeManifest = manifest
+
+                result.importedCount += 1
+                progress.completed += 1
+                progress.succeeded += 1
+            } catch {
+                guard PhotoKitImporter.isSkippableImportError(error) else {
+                    throw error
+                }
+
+                let reason = PhotoKitImporter.skippableImportReason(for: error)
+                mediaFiles[index].importState = .skipped(reason)
+                try manifestStore.appendImportedItems(
+                    [skippedManifestItem(for: media, reason: reason)],
+                    to: &manifest
+                )
+                activeManifest = manifest
+
+                result.skippedCount += 1
+                progress.completed += 1
+                progress.skipped += 1
+            }
+        }
+
+        return result
+    }
+
+    private func importedManifestItem(for media: MediaItem, localIdentifier: String) -> ImportManifestItem {
+        ImportManifestItem(
+            resumeKey: media.resumeKey,
+            relativePath: media.relativePath,
+            size: media.size,
+            modificationDate: media.modificationDate,
+            localIdentifier: localIdentifier,
+            importedAt: Date()
+        )
+    }
+
+    private func skippedManifestItem(for media: MediaItem, reason: String) -> ImportManifestItem {
+        ImportManifestItem(
+            resumeKey: media.resumeKey,
+            relativePath: media.relativePath,
+            size: media.size,
+            modificationDate: media.modificationDate,
+            skippedReason: reason,
+            skippedAt: Date()
+        )
+    }
+
     private func applyResumeManifestIfAvailable(for items: [MediaItem], rootURL: URL) {
         guard !items.isEmpty else {
             statusMessage = "No supported media found."
@@ -406,13 +509,18 @@ final class ImportViewModel: ObservableObject {
             applyManifest(manifest)
             canResumeImport = hasUnfinishedManifest(manifest, mediaFiles: mediaFiles)
 
-            let importedCount = mediaFiles.filter { $0.importState == .skipped }.count
+            let recordedCount = mediaFiles.filter { $0.importState.isSkipped }.count
+            let rejectedCount = rejectedSkippedCount()
             if canResumeImport {
-                statusMessage = "Partial import found: \(importedCount) of \(mediaFiles.count) files already imported."
-            } else if importedCount == mediaFiles.count {
-                resetImportStates()
-                activeManifest = nil
-                statusMessage = "Previous import completed. Import All will start over."
+                statusMessage = "Partial import found: \(recordedCount) of \(mediaFiles.count) files already handled."
+            } else if recordedCount == mediaFiles.count {
+                if rejectedCount > 0 {
+                    statusMessage = "Previous import completed with \(rejectedCount) files skipped by Photos."
+                } else {
+                    resetImportStates()
+                    activeManifest = nil
+                    statusMessage = "Previous import completed. Import All will start over."
+                }
             } else {
                 statusMessage = "Scan complete."
             }
@@ -424,8 +532,15 @@ final class ImportViewModel: ObservableObject {
 
     private func applyManifest(_ manifest: ImportManifest) {
         for index in mediaFiles.indices {
-            if manifest.importedItems[mediaFiles[index].resumeKey] != nil {
-                mediaFiles[index].importState = .skipped
+            if let item = manifest.importedItems[mediaFiles[index].resumeKey] {
+                switch item.status {
+                case .imported:
+                    mediaFiles[index].importState = .skipped(nil)
+                case .skipped:
+                    mediaFiles[index].importState = .skipped(
+                        item.skippedReason ?? "Skipped because Photos rejected this file."
+                    )
+                }
             } else {
                 mediaFiles[index].importState = .pending
             }
@@ -444,7 +559,9 @@ final class ImportViewModel: ObservableObject {
     }
 
     private func deleteImportedSourceFiles(using manifest: ImportManifest) -> SourceDeletionResult {
-        let importedKeys = Set(manifest.importedItems.keys)
+        let importedKeys = Set(manifest.importedItems.values.compactMap { item in
+            item.status == .imported ? item.resumeKey : nil
+        })
         var result = SourceDeletionResult()
 
         for index in mediaFiles.indices where importedKeys.contains(mediaFiles[index].resumeKey) {
@@ -470,11 +587,35 @@ final class ImportViewModel: ObservableObject {
     }
 
     private func deletionStatus(for result: SourceDeletionResult) -> String {
+        let rejectedCount = rejectedSkippedCount()
+
         if result.failures.isEmpty {
+            if rejectedCount > 0 {
+                return "Import complete with \(rejectedCount) files skipped by Photos. Deleted \(result.successfulCount) source files."
+            }
+
             return "Import complete. Deleted \(result.successfulCount) source files."
         }
 
         return "Import complete, but \(result.failures.count) source files could not be deleted."
+    }
+
+    private func importCompletionStatus() -> String {
+        let rejectedCount = rejectedSkippedCount()
+        guard rejectedCount > 0 else {
+            return "Import complete."
+        }
+
+        return "Import complete with \(rejectedCount) files skipped by Photos."
+    }
+
+    private func rejectedSkippedCount() -> Int {
+        mediaFiles.filter { media in
+            if case .skipped(let reason) = media.importState {
+                return reason != nil
+            }
+            return false
+        }.count
     }
 
     private func nextBatchIndexes(from pendingIndexes: [Array<MediaItem>.Index], limits: BatchLimits) -> [Array<MediaItem>.Index] {
@@ -511,6 +652,14 @@ final class ImportViewModel: ObservableObject {
     ) -> String {
         let bytesPerSecond = Int64(Double(bytes) / max(elapsed, 0.001))
         return "Imported \(fileCount) files in \(elapsed.formatted(.number.precision(.fractionLength(1))))s at \(bytesPerSecond.fileSizeText)/s. Next batch up to \(limits.byteLimit.fileSizeText)."
+    }
+
+    private func fallbackBatchStatus(
+        importedCount: Int,
+        skippedCount: Int,
+        elapsed: TimeInterval
+    ) -> String {
+        "Imported \(importedCount) files and skipped \(skippedCount) rejected files in \(elapsed.formatted(.number.precision(.fractionLength(1))))s."
     }
 
     private func mergeCustomSelection(with detectedVolumes: [VolumeCandidate]) -> [VolumeCandidate] {
@@ -557,6 +706,11 @@ private struct SourceDeletionResult {
 
         return "Import complete, but could not delete: \(failures.prefix(3).joined(separator: ", "))"
     }
+}
+
+private struct OneByOneImportResult {
+    var importedCount = 0
+    var skippedCount = 0
 }
 
 private enum PhotosPermissionResetter {

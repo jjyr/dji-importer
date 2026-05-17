@@ -90,8 +90,8 @@ Runtime Notes
 - The app does not do global duplicate detection. It only skips files already
   recorded in the current manifest when resuming an interrupted import.
 - `Delete Originals` removes source files only after the full import finishes.
-  It deletes files listed in the imported record, including files skipped during
-  a resumed import.
+  It deletes only files recorded as successfully imported; files rejected by
+  Photos or otherwise failed are kept on disk.
 - If Photos rejects imports, open Photos once manually, then run the import
   again.
 - The app is currently intended for direct Developer ID distribution rather than
